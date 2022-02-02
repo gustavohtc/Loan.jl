@@ -3,6 +3,10 @@ uuid = "27b46aef-a92d-44de-96da-c5df92454c3d"
 authors = ["Gustavo H T Cardoso <ghtcardoso@icloud.com> and contributors"]
 version = "0.1.0"
 
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+
 [compat]
 julia = "1.6"
 
