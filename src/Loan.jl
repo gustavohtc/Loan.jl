@@ -46,7 +46,7 @@ end
 
 """
 
-days_between(dueDate::Dates.Date,initialDate::Dates.Date) = ((dueDate-initialDate)).value-1
+days_between(dueDate::Dates.Date,initialDate::Dates.Date) = ((dueDate-initialDate)).value
 
 """
     pmt(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T}=BusinessDays.NullHolidayCalendar();period=Dates.Month) where T<: BusinessDays.HolidayCalendar
@@ -71,7 +71,5 @@ function pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::Abstr
     fp = factor_price(rate,qtPeriodsFirst)
     amount/sum(map(fp,qtsPeriods))
 end
-
-
 
 end
