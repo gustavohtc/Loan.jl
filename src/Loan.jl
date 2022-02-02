@@ -32,27 +32,31 @@ factor_price(rate,qtPeriods,qtPeriodsFirst) = 1/(1+rate)^(qtPeriods+qtPeriodsFir
 factor_price(rate,qtPeriodsFirst) = (qtPeriods)->factor_price(rate,qtPeriods,qtPeriodsFirst)
 
 """
-    get_due_dates(initialDate::Dates.Date,nper::Number,calendar::Symbol;period=Dates.Month,grace=0)
+    due_dates(initialDate::Dates.Date,nper::Number,calendar::Symbol;period=Dates.Month,grace=0)
 
 Return `nper` of due dates after `initialDate` + `grace` period (in days) that is a business day in `calendar`
 """
 
-function get_due_dates(initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T};period=Dates.Month,grace=0) where T<: BusinessDays.HolidayCalendar
+function due_dates(initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T}=BusinessDays.NullHolidayCalendar();period=Dates.Month,grace=0) where T<: BusinessDays.HolidayCalendar
     map(i->BusinessDays.tobday(calendar,initialDate+Dates.Day(grace)+period(i)),1:nper)
 end
 
+"""
+    days_between(dates::AbstractVector{Dates.Date},initialDate::Dates.Date)
 
 """
-    pmt(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T};period=Dates.Month) where T<: BusinessDays.HolidayCalendar
+
+days_between(dueDate::Dates.Date,initialDate::Dates.Date) = ((dueDate-initialDate)).value-1
+
+"""
+    pmt(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T}=BusinessDays.NullHolidayCalendar();period=Dates.Month) where T<: BusinessDays.HolidayCalendar
 
 Return the constant payment value required to settle a loan (`amount`) with a fixed `rate` agreed at `initialDate` in `nper` payments
 """
 
-function pmt(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T};period=Dates.Month,grace=0) where T<: BusinessDays.HolidayCalendar
-    qtsPeriods = get_due_dates(initialDate,nper,calendar,period=period,grace=grace) .|> (dueDate) -> (dueDate-initialDate).value/DAYS_OF_PERIOD[period]
-    qtPeriodsFirst = minimum(qtsPeriods)
-    fp = factor_price(rate,qtPeriodsFirst)
-    amount/sum(map(fp,qtsPeriods))
+function pmt(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T}=BusinessDays.NullHolidayCalendar();period=Dates.Month,grace=0) where T<: BusinessDays.HolidayCalendar
+    dueDates = due_dates(initialDate,nper,calendar,period=period,grace=grace)
+    pmt(amount,rate,initialDate,dueDates,period=period)
 end
 
 """
@@ -62,7 +66,7 @@ Return the constant payment value required to settle a loan (`amount`) with a fi
 """
 
 function pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period=Dates.Month)
-    qtsPeriods = dueDates .|> dueDate-> (dueDate-initialDate).value/DAYS_OF_PERIOD[period]
+    qtsPeriods = days_between.(dueDates,initialDate) ./ DAYS_OF_PERIOD[period]
     qtPeriodsFirst = minimum(qtsPeriods)
     fp = factor_price(rate,qtPeriodsFirst)
     amount/sum(map(fp,qtsPeriods))
