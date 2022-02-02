@@ -31,7 +31,13 @@ present_value(amount,rate,dueDate;period="month")= present_value(amount,rate,due
 factor_price(rate,qtPeriods,qtPeriodsFirst) = 1/(1+rate)^(qtPeriods+qtPeriodsFirst-1)
 factor_price(rate,qtPeriodsFirst) = (qtPeriods)->factor_price(rate,qtPeriods,qtPeriodsFirst)
 
-function total_payment(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period="month")
+"""
+    pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period="month")
+
+Return the constant payment value required to settle a loan (`amount`) with a fixed `rate` with `dueDates` payments flow
+"""
+
+function pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period="month")
     qtsPeriods = dueDates .|> dueDate-> (dueDate-initialDate).value/DAYS_OF_PERIOD[period]
     qtPeriodsFirst = minimum(qtDays)
     fp = factor_price(rate,qtPeriodsFirst)
