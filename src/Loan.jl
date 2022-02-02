@@ -1,30 +1,30 @@
 module Loan
 
-import Dates
+import Dates, BusinessDays
 
-export present_value
+export present_value, pmt
 
-const DAYS_OF_PERIOD=Dict("day"=>1,"month"=>30,"year"=>365.25)
+const DAYS_OF_PERIOD=Dict(Dates.Day=>1,Dates.Month=>30,Dates.Year=>365.25)
 
 
 """
-    present_value(amount,rate,dueDate,presentDate;period="month")
+    present_value(amount,rate,dueDate,presentDate;period=Dates.Month)
 
 Return the value at presentDate of value of the `amount` due to `dueDate` discounted by the `rate`.
 """
 
-function present_value(amount,rate,dueDate,presentDate;period="month")
+function present_value(amount,rate,dueDate,presentDate;period=Dates.Month)
     period ∉ keys(DAYS_OF_PERIOD) && error("Period not defined, must be $(join(keys(DAYS_OF_PERIOD),", "," or "))")
     amount*(1+rate)^((presentDate-dueDate).value/DAYS_OF_PERIOD[period])
 end
 
 """
-    present_value(amount,rate,dueDate;period="month")
+    present_value(amount,rate,dueDate;period=Dates.Month)
 
 Return the present value of the `amount` due to `dueDate` discounted by the `rate`.
 """
 
-present_value(amount,rate,dueDate;period="month")= present_value(amount,rate,dueDate,Dates.today(),period=period)
+present_value(amount,rate,dueDate;period=Dates.Month)= present_value(amount,rate,dueDate,Dates.today(),period=period)
 
 
 
@@ -32,17 +32,42 @@ factor_price(rate,qtPeriods,qtPeriodsFirst) = 1/(1+rate)^(qtPeriods+qtPeriodsFir
 factor_price(rate,qtPeriodsFirst) = (qtPeriods)->factor_price(rate,qtPeriods,qtPeriodsFirst)
 
 """
-    pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period="month")
+    get_due_dates(initialDate::Dates.Date,nper::Number,calendar::Symbol;period=Dates.Month,grace=0)
+
+Return `nper` of due dates after `initialDate` + `grace` period (in days) that is a business day in `calendar`
+"""
+
+function get_due_dates(initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T};period=Dates.Month,grace=0) where T<: BusinessDays.HolidayCalendar
+    map(i->BusinessDays.tobday(calendar,initialDate+Dates.Day(grace)+period(i)),1:nper)
+end
+
+
+"""
+    pmt(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T};period=Dates.Month) where T<: BusinessDays.HolidayCalendar
+
+Return the constant payment value required to settle a loan (`amount`) with a fixed `rate` agreed at `initialDate` in `nper` payments
+"""
+
+function pmt(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T};period=Dates.Month,grace=0) where T<: BusinessDays.HolidayCalendar
+    qtsPeriods = get_due_dates(initialDate,nper,calendar,period=period,grace=grace) .|> (dueDate) -> (dueDate-initialDate).value/DAYS_OF_PERIOD[period]
+    qtPeriodsFirst = minimum(qtsPeriods)
+    fp = factor_price(rate,qtPeriodsFirst)
+    amount/sum(map(fp,qtsPeriods))
+end
+
+"""
+    pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period=Dates.Month)
 
 Return the constant payment value required to settle a loan (`amount`) with a fixed `rate` with `dueDates` payments flow
 """
 
-function pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period="month")
+function pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period=Dates.Month)
     qtsPeriods = dueDates .|> dueDate-> (dueDate-initialDate).value/DAYS_OF_PERIOD[period]
-    qtPeriodsFirst = minimum(qtDays)
+    qtPeriodsFirst = minimum(qtsPeriods)
     fp = factor_price(rate,qtPeriodsFirst)
     amount/sum(map(fp,qtsPeriods))
 end
+
 
 
 end
