@@ -6,6 +6,12 @@ export present_value, pmt
 
 const DAYS_OF_PERIOD=Dict(Dates.Day=>1,Dates.Month=>30,Dates.Year=>365.25)
 
+struct LoanAgreement
+    amount::Number
+    rate::Number
+    dueCashFlow::Dict{Dates.Date,Number}
+    paidCashFlow::Dict{Dates.Date,Number}
+end
 
 """
     present_value(amount,rate,dueDate,presentDate;period=Dates.Month)
@@ -71,5 +77,7 @@ function pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::Abstr
     fp = factor_price(rate,qtPeriodsFirst)
     amount/sum(map(fp,qtsPeriods))
 end
+
+
 
 end
