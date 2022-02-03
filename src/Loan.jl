@@ -1,16 +1,24 @@
 module Loan
 
 import Dates, BusinessDays
-
-export present_value, pmt
+import Base:isless
+export present_value, installment, due_dates
 
 const DAYS_OF_PERIOD=Dict(Dates.Day=>1,Dates.Month=>30,Dates.Year=>365.25)
+
+mutable struct Installment{T <: Vector{Pair{Dates.Date,Float64}}} 
+    number::Number
+    dueDate::Dates.Date
+    dueValue::Float64
+    payments::T
+end
+isless(a::Installment,b::Installment) = a.number < b.number
+
 
 struct LoanAgreement
     amount::Number
     rate::Number
-    dueCashFlow::Dict{Dates.Date,Number}
-    paidCashFlow::Dict{Dates.Date,Number}
+    installments::Vector{Installment}
 end
 
 """
@@ -35,6 +43,7 @@ present_value(amount,rate,dueDate;period=Dates.Month)= present_value(amount,rate
 
 
 factor_price(rate,qtPeriods,qtPeriodsFirst) = 1/(1+rate)^(qtPeriods+qtPeriodsFirst-1)
+
 factor_price(rate,qtPeriodsFirst) = (qtPeriods)->factor_price(rate,qtPeriods,qtPeriodsFirst)
 
 """
@@ -55,29 +64,48 @@ end
 days_between(dueDate::Dates.Date,initialDate::Dates.Date) = ((dueDate-initialDate)).value
 
 """
-    pmt(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T}=BusinessDays.NullHolidayCalendar();period=Dates.Month) where T<: BusinessDays.HolidayCalendar
+    installment(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T}=BusinessDays.NullHolidayCalendar();period=Dates.Month) where T<: BusinessDays.HolidayCalendar
 
 Return the constant payment value required to settle a loan (`amount`) with a fixed `rate` agreed at `initialDate` in `nper` payments
 """
 
-function pmt(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T}=BusinessDays.NullHolidayCalendar();period=Dates.Month,grace=0) where T<: BusinessDays.HolidayCalendar
+function installment(amount::Number,rate::Number,initialDate::Dates.Date,nper::Number,calendar::Union{Symbol,T}=BusinessDays.NullHolidayCalendar();period=Dates.Month,grace=0) where T<: BusinessDays.HolidayCalendar
     dueDates = due_dates(initialDate,nper,calendar,period=period,grace=grace)
-    pmt(amount,rate,initialDate,dueDates,period=period)
+    installment(amount,rate,initialDate,dueDates,period=period)
 end
 
 """
-    pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period=Dates.Month)
+    installment(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period=Dates.Month)
 
 Return the constant payment value required to settle a loan (`amount`) with a fixed `rate` with `dueDates` payments flow
 """
 
-function pmt(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period=Dates.Month)
+function installment(amount::Number,rate::Number,initialDate::Dates.Date,dueDates::AbstractVector{Dates.Date};period=Dates.Month)
     qtsPeriods = days_between.(dueDates,initialDate) ./ DAYS_OF_PERIOD[period]
     qtPeriodsFirst = minimum(qtsPeriods)
     fp = factor_price(rate,qtPeriodsFirst)
     amount/sum(map(fp,qtsPeriods))
 end
 
+"""
+    value_at_date(installment::Installment,date::Dates.Date)
+    
+Return the present value of the non-paid installment or the paid value before the `date`.
+""" 
 
+function value_at_date(installment::Installment,date::Dates.Date)
+    
+end
+
+
+"""
+    value_at_date(loan::LoanAgreement,date::Dates.Date)
+    
+Return the present value of the non-paid plus the amount paid until the `date` of a `loan` agreement.
+""" 
+
+function value_at_date(loan::LoanAgreement,date::Dates.Date)
+
+end
 
 end

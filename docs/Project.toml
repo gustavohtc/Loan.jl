@@ -1,3 +1,6 @@
 [deps]
+BusinessDays = "4f18b42c-503e-5345-9536-bb0f25fc7038"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Loan = "27b46aef-a92d-44de-96da-c5df92454c3d"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
