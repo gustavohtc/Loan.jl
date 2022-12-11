@@ -1,10 +1,12 @@
 module Loan
 
 import Dates, BusinessDays
-import Base:isless
+import Base:isless,getindex, lastindex, iterate
 export present_value, installment, due_dates
 
 const DAYS_OF_PERIOD=Dict(Dates.Day=>1,Dates.Month=>30,Dates.Year=>365.25)
+abstract type AbstractLoan; end
+abstract type AbstractInstallments; end
 
 mutable struct Installment{T <: Dates.DatePeriod}
     number::Number
@@ -13,24 +15,101 @@ mutable struct Installment{T <: Dates.DatePeriod}
     dueValue::Float64
     rate::Float64
     period::Type{T}
-    payments::Vector{Pair{Dates.Date,Float64}}
+    payments::AbstractVector{Pair{Dates.Date,Float64}}
 end
+mutable struct Installments{T <: Dates.DatePeriod} <: AbstractInstallments
+    installments :: AbstractVector{Installment{T}} 
+end
+mutable struct PriceInstallments{T <: Dates.DatePeriod} <: AbstractInstallments
+    nper ::Number
+    agreementDate::Dates.Date
+    dueDates::AbstractVector{Dates.Date}
+    dueValue::Float64
+    rate ::Float64
+    period::Type{T}
+    payments::AbstractVector{Pair{Dates.Date,Float64}}
+end
+function Base.getindex(ins::PriceInstallments,i)
+    i <0 || i > ins.nper && throw(BoundsError(ins,i))
+    Installment(
+        i,
+        ins.agreementDate,
+        ins.dueDates[i],
+        ins.dueValue,
+        ins.rate,
+        ins.period,
+        Pair{Dates.Date,Float64}[]
+    )
+end
+function Base.getindex(ins::Installments,i)
+    ins.installments[i]
+end
+Base.firstindex(ins::AbstractInstallments)= 1
+
+Base.lastindex(ins::AbstractInstallments)= 1
+Base.lastindex(ins::PriceInstallments)  = ins.nper
+Base.length(ins::PriceInstallments) = ins.nper
+Base.length(ins::Installments)= ins.installments |> length
+Base.iterate(ins::T,state) where T<:AbstractInstallments = state > length(ins) ? nothing : (ins[state],state+1) 
+Base.iterate(ins::T) where T<:AbstractInstallments = (ins[firstindex(ins)],2) 
 Base.isless(a::Installment,b::Installment) = a.dueDate < b.dueDate
+function Base.merge(x::Installment,ls_y...)
+    y= merge(ls_y...)
+    x.dueDate!== y.dueDate && error("two installments must have the same due date to be summed.")
+    vl_x = present_value(x.dueValue,x.rate,x.dueDate,x.agreementDate)
+    vl_y = present_value(y.dueValue,y.rate,y.dueDate,y.agreementDate)
+    Installment(
+        -1,
+        min(x.agreementDate, y.agreementDate),
+        x.dueDate,
+        x.dueValue+y.dueValue,
+        (x.rate * vl_x + y.rate * vl_y)/(vl_x+vl_y),
+        x.period,
+        x.payments
+    )
+end 
+Base.merge(x::Installment) = x
 
-
-struct LoanAgreement{T <: Dates.DatePeriod}
+struct LoanAgreement{T <: Dates.DatePeriod} <:AbstractLoan
     amount::Number
     date::Dates.Date
     rate::Number
     period::Type{T}
-    installments::Vector{Installment{T}}
+    installments::Installments{T}
+end
+
+function LoanAgreement(amount,rate,agreementDate,dates::AbstractArray,nper;calendar=BusinessDays.NullHolidayCalendar(),period=Dates.Month)
+    dueDates = @view dates[1:nper]
+    installmentValue = installment(amount,rate,agreementDate,dueDates,period=period)
+    installments = map((dt,nr)-> Installment(nr,agreementDate,dt,installmentValue,rate,period,Pair{Dates.Date,Float64}[]),dueDates,1:nper)
+    LoanAgreement(amount,agreementDate,rate,period,Installments(installments))
 end
 
 function LoanAgreement(amount,rate,agreementDate,firstDueDate,nper;calendar=BusinessDays.NullHolidayCalendar(),period=Dates.Month)
     dueDates::Vector{Dates.Date} = [firstDueDate;due_dates(firstDueDate,nper-1,calendar,period=period)]
+    LoanAgreement(amount,rate,agreementDate,dueDates,nper,calendar = calendar,period=period)
+end
+
+
+struct PriceLoanAgreement{T <: Dates.DatePeriod,W<:AbstractInstallments} <:AbstractLoan
+    amount::Number
+    date::Dates.Date
+    rate::Number
+    period::Type{T}
+    installments::W
+end
+
+
+function PriceLoanAgreement(amount,rate,agreementDate,dates::AbstractVector,nper;calendar=BusinessDays.NullHolidayCalendar(),period=Dates.Month)
+    dueDates = @view dates[1:nper]
     installmentValue = installment(amount,rate,agreementDate,dueDates,period=period)
-    installments = map((dt,nr)-> Installment(nr,agreementDate,dt,installmentValue,rate,period,Pair{Dates.Date,Float64}[]),dueDates,1:nper)
-    LoanAgreement(amount,agreementDate,rate,period,installments)
+    installments = PriceInstallments(nper,agreementDate,dueDates,installmentValue,rate,period,Pair{Dates.Date, Float64}[]) 
+    PriceLoanAgreement(amount,agreementDate,rate,period,installments)
+end
+
+function PriceLoanAgreement(amount,rate,agreementDate,firstDueDate,nper;calendar=BusinessDays.NullHolidayCalendar(),period=Dates.Month)
+    dueDates::Vector{Dates.Date} = [firstDueDate;due_dates(firstDueDate,nper-1,calendar,period=period)]
+    PriceLoanAgreement(amount,rate,agreementDate,dueDates,nper,calendar=calendar,period=period)
 end
 
 """
@@ -131,7 +210,7 @@ end
     
 Return the present value of the non-paid plus the amount paid until the `date` of a `loan` agreement.
 """ 
-function value_at_date(loan::LoanAgreement,date::Dates.Date;justUnpaid=false,regularPayment=false)
+function value_at_date(loan::AbstractLoan,date::Dates.Date;justUnpaid=false,regularPayment=false)
     map(installment->begin 
         (paid,present) = value_at_date(installment,date,regularPayment = regularPayment)
         justUnpaid && return present
@@ -149,17 +228,16 @@ end
     
 Merge two LoanAgreements `a` an `a`, resulting a new LoanAgreement which cash flow is equals to the sum of `a` and `b`. 
 """
-function merge_loan(a::LoanAgreement,b::LoanAgreement)
-    parcs = sort([a.installments;b.installments])
-    for i in 1:length(parcs)
-        parcs[i].number =i
-    end
+function merge_loan(a::AbstractLoan,b::AbstractLoan)
+    parcs = sort([map(x->x,a.installments);map(x->x,b.installments)])
+    dates = unique(map(x -> x.dueDate,parcs))
+    installs = map(x -> merge(filter(p-> p.dueDate == x, parcs)...),dates)
     LoanAgreement(
-        a.amount+b.amount,
+        a.amount + b.amount,
         min(a.date,b.date),
         (a.rate * a.amount + b.rate * b.amount)/(a.amount+b.amount),
         a.period,
-        parcs
+        Installments(installs)
     )
 end
 
@@ -187,6 +265,13 @@ Which value results in a regular payments of `pmt` if paid in `n` constant insta
 """
 function value_by_pmt(pmt::Number,nper::Number,rate::Number,initialDate::Dates.Date,firstDueDate::Dates.Date;calendar=BusinessDays.NullHolidayCalendar(),period=Dates.Month)
     dueDates = [firstDueDate;due_dates(firstDueDate,nper-1,calendar,period=period)]
+    qtsPeriods = days_between.(dueDates,initialDate) ./ DAYS_OF_PERIOD[period]
+    fp = factor_price(rate)
+    pmt*sum(map(fp,qtsPeriods))
+end
+
+function value_by_pmt(pmt::Number,nper::Number,rate::Number,initialDate::Dates.Date,dates::Vector{Dates.Date};calendar=BusinessDays.NullHolidayCalendar(),period=Dates.Month)
+    dueDates = @view dates[1:nper]
     qtsPeriods = days_between.(dueDates,initialDate) ./ DAYS_OF_PERIOD[period]
     fp = factor_price(rate)
     pmt*sum(map(fp,qtsPeriods))
