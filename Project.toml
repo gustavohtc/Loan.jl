@@ -1,7 +1,7 @@
 name = "Loan"
 uuid = "27b46aef-a92d-44de-96da-c5df92454c3d"
 authors = ["Gustavo H T Cardoso <ghtcardoso@icloud.com> and contributors"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 BusinessDays = "4f18b42c-503e-5345-9536-bb0f25fc7038"

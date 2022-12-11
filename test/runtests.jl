@@ -23,13 +23,16 @@ BusinessDays.initcache(BusinessDays.BRSettlement())
     @testset verbose = true "Basic Loan" begin 
         l1 = Loan.LoanAgreement(1000,0.012,Date(2021),Date(2021,2,15),15,calendar = BusinessDays.BRSettlement(),period=Dates.Month)
         l2 = Loan.PriceLoanAgreement(2000,0.012,Date(2021),Date(2021,2,15),5, calendar = BusinessDays.BRSettlement(),period=Dates.Month)
+        l3 = Loan.PriceLoanAgreement(2000,0.012,Date(2021),Date(2021,2,15),5, calendar = BusinessDays.BRSettlement(),period=Dates.Month)
         lm = Loan.merge_loan(l1,l2)
+        lm2 = Loan.merge_loan(l2,l3)
         @test lm.amount ≈ l1.amount + l2.amount
         @test lm.installments[1].dueValue ≈ l1.installments[1].dueValue + l2.installments[2].dueValue
         @test Loan.value_at_date(lm,Date(2021)) ≈Loan.value_at_date(l1,Date(2021)) + Loan.value_at_date(l2,Date(2021))
         @test Loan.value_at_date(lm,Date(2021)+Month(7)) ≈Loan.value_at_date(l1,Date(2021)+Month(7)) + Loan.value_at_date(l2,Date(2021)+Month(7))
         @test Loan.value_at_date(lm,Date(2021)+Month(7), justUnpaid=true,regularPayment=true) ≈ Loan.value_at_date(l1,Date(2021)+Month(7), justUnpaid=true,regularPayment=true) + Loan.value_at_date(l2,Date(2021)+Month(7), justUnpaid=true,regularPayment=true)
         @test Loan.value_at_date(l2,Date(2021)+Month(7), justUnpaid=true,regularPayment=true) ≈ 0.0
+        @test Loan.value_at_date(lm2,Date(2021)+Month(7), justUnpaid=true,regularPayment=true) ≈ Loan.value_at_date(l2,Date(2021)+Month(7), justUnpaid=true,regularPayment=true) + Loan.value_at_date(l3,Date(2021)+Month(7), justUnpaid=true,regularPayment=true)
         @test lm.installments |> length == 15
     end
     @testset  verbose=true "installment" begin
